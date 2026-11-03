@@ -50,6 +50,7 @@ import sawfowl.synapse.implementapi.services.ICommandService;
 import sawfowl.synapse.implementapi.services.IConfigurationService;
 import sawfowl.synapse.implementapi.services.ILocaleService;
 import sawfowl.synapse.implementapi.services.ILoggerService;
+import sawfowl.synapse.utils.DelayTimerTask;
 import sawfowl.synapse.utils.WatchRunner;
 
 @Plugin(id = "synapse", authors = {"SawFowl"}, version = "1.0.0")
@@ -72,9 +73,12 @@ public class SynapsePlugin {
 		SynapsePlugin.container = container;
 		logger = ILoggerService.getInstance().createApacheLogger("Synapse");
 		ILocaleService.createInstance(dataDirectory);
+		// Only "Config.<known extension>": a backup like "Config.yml.bak" used to be picked up
+		// as an UNKNOWN type and stop the plugin from loading.
 		File mainConfig = null;
-		for(File file : dataDirectory.toFile().listFiles()) {
-			if(!file.isDirectory() && file.getName().contains("Config")) {
+		File[] files = dataDirectory.toFile().listFiles();
+		if(files != null) for(File file : files) {
+			if(file.isFile() && file.getName().startsWith("Config.") && ConfigTypes.getTypeByExtension(ConfigTypes.getExtension(file.getName())) != ConfigTypes.UNKNOWN) {
 				mainConfig = file;
 				break;
 			}
@@ -140,7 +144,7 @@ public class SynapsePlugin {
 					}
 				}
 			});
-			WatchRunner.pause();
+			WatchRunner.resume();
 			copy = null;
 		}
 		new InjectorAPI(new ISynapse(server)).createInjector();
@@ -235,7 +239,8 @@ public class SynapsePlugin {
 
 	@Subscribe
 	public void onCommand(CommandExecuteEvent event) {
-		if(!(event.getCommandSource() instanceof Player player)) return;
+		// Most commands run with nothing delayed: do not build the localized message for them.
+		if(!(event.getCommandSource() instanceof Player player) || !DelayTimerTask.hasPending(player)) return;
 		ICommandService.getInstance().cancelingDelayedExecution(player, locales.getAsReferenced(player).getCommands().getExceptions().getDelayCancel());
 	}
 

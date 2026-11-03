@@ -44,6 +44,11 @@ public class DelayTimerTask implements Consumer<ScheduledTask> {
 		EXECUTORS.computeIfAbsent(uuid, _ -> ConcurrentHashMap.newKeySet()).add(new ActiveExecutor(this.command, executorUUID));
 	}
 
+	public static boolean hasPending(Player player) {
+		Set<ActiveExecutor> active = player == null ? null : EXECUTORS.get(player.getUniqueId());
+		return active != null && !active.isEmpty();
+	}
+
 	public static boolean cancel(Player player, Component message) {
 		if(player == null) return false;
 		Set<ActiveExecutor> active = EXECUTORS.get(player.getUniqueId());

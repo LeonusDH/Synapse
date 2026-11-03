@@ -183,14 +183,14 @@ public class SynapsePlugin {
 					.canUse(source -> source instanceof Player)
 					.setSettings(getCommands().getProxytell().getSettings())
 					.setArguments(
-						Argument.createComponent("Message", false)
+						Argument.createPlayerComponent("Message", false)
 					)
 					.setExecutor(new Tell.Console())
 					.build()
 			)
 			.setArguments(
 				Argument.PLAYER,
-				Argument.createComponent("Message", false)
+				Argument.createPlayerComponent("Message", false)
 			)
 			.setExecutor(new Tell())
 			.build()

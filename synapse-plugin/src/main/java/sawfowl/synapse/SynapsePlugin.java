@@ -1,10 +1,10 @@
 package sawfowl.synapse;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.spongepowered.configurate.ConfigurateException;
@@ -112,41 +112,13 @@ public class SynapsePlugin {
 		locales = (ILocalesList<LocaleConfig>) ILocaleService.getInstance().createLocales(container, LocaleConfig.class);
 		if(!locales.contains(Locales.DEFAULT)) locales.createReferencedTranslation(config == null ? ConfigTypes.GEYSER_YAML : getConfig().getLocalesSettings(container).getType(), Locales.DEFAULT, LocaleConfig.class);
 		if(!locales.contains(Locales.RU_RU)) locales.createReferencedTranslation(config == null ? ConfigTypes.GEYSER_YAML : getConfig().getLocalesSettings(container).getType(), Locales.RU_RU, LocaleConfig.createRu());
-		if(config != null) {
-			List<Locale> locales = new ArrayList<>();
-			SynapsePlugin.locales.forEach(locale -> {
-				if(getConfig().getLocalesSettings(container).getType() != locale.getType()) locales.add(locale.getLocale());
-			});
-			locales.forEach(locale -> {
-				var config = SynapsePlugin.locales.getAsReferenced(locale);
-				SynapsePlugin.locales.getSimple(locale).getPath().toFile().delete();
-				if(SynapsePlugin.locales.contains(locale)) SynapsePlugin.locales.remove(locale);
-				SynapsePlugin.locales.createReferencedTranslation(getConfig().getLocalesSettings(container).getType(), locale, config);
-			});
-		} else config = IConfigurationService.getInstance()
+		if(config == null) config = IConfigurationService.getInstance()
 				.createReferencedConfig(container, Config.class)
 				.setPath(dataDirectory)
 				.setName("Config")
 				.setType(ConfigTypes.GEYSER_YAML)
 				.build();
-		if(getConfig().getLocalesSettings(container).isForcedUse()) {
-			@SuppressWarnings("unchecked")
-			List<ReferencedLocale<LocaleConfig>> copy = locales.stream().map(locale -> (ReferencedLocale<LocaleConfig>) locale).toList();
-			WatchRunner.pause();
-			copy.forEach(localeConfig -> {
-				if(!localeConfig.getType().comparableType(getConfig().getLocalesSettings(container).getType())) {
-					locales.remove(localeConfig.getLocale());
-					localeConfig.getPath().toFile().delete();
-					try {
-						locales.createReferencedTranslation(getConfig().getLocalesSettings(container).getType(), localeConfig.getLocale(), localeConfig.get()).getLoader().save(localeConfig.getRootNode());
-					} catch (ConfigurateException e) {
-						e.printStackTrace();
-					}
-				}
-			});
-			WatchRunner.resume();
-			copy = null;
-		}
+		convertOwnLocales();
 		new InjectorAPI(new ISynapse(server)).createInjector();
 		commands = Synapse.getConfigurationService().createReferencedConfig(container, Commands.class).setName("Commands").setType(getConfig().getConfigSettings(container).getType()).setPath(dataDirectory).build();
 		if(getCommands().getProxysudo().isEnable()) SynapseBrigadierCommand.builder("proxysudo", container)
@@ -219,7 +191,7 @@ public class SynapsePlugin {
 
 	@Subscribe
 	public void onStarted(ProxyInitializeEvent event) {
-		WatchRunner.getInstance().enable();
+		// run() enables the watcher itself.
 		WatchRunner.getInstance().run();
 		Synapse.getProxy().getScheduler().buildTask(this, () -> ICommandService.getInstance().clearLastUsage()).delay(1, TimeUnit.SECONDS).repeat(5, TimeUnit.SECONDS).schedule();
 		Synapse.getProxy().getScheduler().buildTask(this, () -> ICallbackService.getInstance().clearOld()).delay(10, TimeUnit.SECONDS).repeat(1, TimeUnit.MINUTES).schedule();
@@ -274,6 +246,37 @@ public class SynapsePlugin {
 
 	public static Logger getLogger() {
 		return logger;
+	}
+
+	/**
+	 * Synapse's own locales follow the format from its config.<br>
+	 * There were two copies of this: one compared types with {@code !=}, so YAML and GeyserYaml
+	 * files were rewritten on every start, and it did not pause the file watcher.
+	 */
+	@SuppressWarnings("unchecked")
+	private void convertOwnLocales() {
+		ConfigTypes target = getConfig().getLocalesSettings(container).getType();
+		List<ReferencedLocale<LocaleConfig>> toConvert = locales.stream()
+			.map(locale -> (ReferencedLocale<LocaleConfig>) locale)
+			.filter(locale -> !locale.getType().comparableType(target))
+			.toList();
+		if(toConvert.isEmpty()) return;
+		WatchRunner.pause();
+		try {
+			for(ReferencedLocale<LocaleConfig> old : toConvert) {
+				ConfigurationNode node = old.getRootNode();
+				locales.remove(old.getLocale());
+				try {
+					locales.createReferencedTranslation(target, old.getLocale(), old.get()).getLoader().save(node);
+					// Deleted only after the new file is written.
+					Files.deleteIfExists(old.getPath());
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		} finally {
+			WatchRunner.resume();
+		}
 	}
 
 	public static long getServerUptime() {

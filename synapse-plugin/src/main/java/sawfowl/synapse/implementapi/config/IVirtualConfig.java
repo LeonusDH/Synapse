@@ -204,7 +204,12 @@ public class IVirtualConfig implements VirtualConfig {
 	}
 
 	<T, C extends ConfigurationNode> ConfigurationLoader<C> selectLoader() {
-		return IConfigurationService.getInstance().createConfigLoader(bufferedWriter, bufferedReader, type, serializers);
+		// A fresh reader/writer on every load/save: the loader used to keep the first pair,
+		// which Configurate closes after use, so a second save or load failed with "Stream closed".
+		return IConfigurationService.getInstance().createConfigLoader(
+			() -> bufferedWriter = new BufferedWriter(stringWriter = new StringWriter()),
+			() -> bufferedReader = new BufferedReader(stringReader = new StringReader(rawData)),
+			type, serializers);
 	}
 
 	protected void updateRawData() {

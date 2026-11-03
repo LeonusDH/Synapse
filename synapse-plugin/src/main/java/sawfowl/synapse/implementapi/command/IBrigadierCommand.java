@@ -139,12 +139,7 @@ public class IBrigadierCommand implements SynapseBrigadierCommand {
 		var price = activePrice(player);
 		if(price == null) return;
 		var account = Synapse.getInstance().getServiceProvider().get(EconomyService.class).getOrCreateUniqueAccount(player);
-		if(!account.hasBalance(price.getCurrency()) || account.getBalance(price.getCurrency()).doubleValue() < price.getPrice().doubleValue()) exceptionMoney(player.getEffectiveLocale(), price.getCurrency(), price.getPrice());
-	}
-
-	public void economyUse(Player player) throws CommandException {
-		var price = activePrice(player);
-		if(price != null) Synapse.getInstance().getServiceProvider().get(EconomyService.class).getOrCreateUniqueAccount(player).withdraw(price.getCurrency(), price.getPrice());
+		if(!account.hasBalance(price.getCurrency()) || account.getBalance(price.getCurrency()).compareTo(price.getPrice()) < 0) exceptionMoney(player.getEffectiveLocale(), price.getCurrency(), price.getPrice());
 	}
 
 	public void clearLastUsage() {
@@ -419,7 +414,12 @@ public class IBrigadierCommand implements SynapseBrigadierCommand {
 	 */
 	private CommandPrice activePrice(Player player) {
 		var price = settings.getPrice().orElse(null);
-		if(price == null || price.getPrice().doubleValue() <= 0 || !Synapse.getInstance().getServiceProvider().isExist(EconomyService.class) || (price.getIgnorePermission() != null && player.hasPermission(price.getIgnorePermission()))) return null;
+		if(price == null || price.getPrice().signum() <= 0 || !Synapse.getInstance().getServiceProvider().isExist(EconomyService.class) || (price.getIgnorePermission() != null && player.hasPermission(price.getIgnorePermission()))) return null;
+		if(price.getCurrency() == null) {
+			// The currency from the config is not registered by the economy plugin: nothing to charge in.
+			SynapsePlugin.getLogger().warn("[" + getCommandNode().getName() + "] Unknown currency in the command price, the command is not charged.");
+			return null;
+		}
 		return price;
 	}
 

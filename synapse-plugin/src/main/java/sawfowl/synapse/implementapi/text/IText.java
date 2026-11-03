@@ -13,7 +13,6 @@ import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import sawfowl.synapse.api.text.Text;
-import sawfowl.synapse.api.text.callback.Callback;
 import sawfowl.synapse.api.utils.TextUtils;
 
 public class IText implements Text {
@@ -97,13 +96,13 @@ public class IText implements Text {
 
 	@Override
 	public Text createCallBack(Consumer<CommandSource> callback) {
-		component = component.clickEvent(Callback.of(callback));
+		component = TextUtils.createCallBack(component, callback);
 		return this;
 	}
 
 	@Override
 	public Text createCallBack(Runnable runnable) {
-		createCallBack(_ -> runnable.run());
+		component = TextUtils.createCallBack(component, runnable);
 		return this;
 	}
 
